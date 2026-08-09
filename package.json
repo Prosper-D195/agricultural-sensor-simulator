@@ -1,0 +1,26 @@
+{
+  "name": "agricultural-sensor-simulator",
+  "version": "1.0.0",
+  "description": "Simulateur de capteur agricole avec TCP et UDP",
+  "main": "src/server.js",
+  "scripts": {
+    "server": "node src/server.js",
+    "sensor:tcp": "node src/sensor-simulator.js tcp",
+    "sensor:udp": "node src/sensor-simulator.js udp",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prosper-D195/agricultural-sensor-simulator.git"
+  },
+  "keywords": [
+    "nodejs",
+    "iot",
+    "agriculture",
+    "tcp",
+    "udp"
+  ],
+  "author": "Prosper",
+  "license": "ISC",
+  "type": "commonjs"
+}
