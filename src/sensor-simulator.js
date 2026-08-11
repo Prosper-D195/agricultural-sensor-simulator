@@ -23,15 +23,19 @@ function startTcpSimulator() {
     () => {
       console.log(`Connecté au serveur TCP ${HOST}:${TCP_PORT}`);
 
-      const message = JSON.stringify(sensorReading);
+      sendReading();
 
-      client.write(message);
-
-      console.log("Mesure TCP envoyée :", sensorReading);
-
-      client.end();
+      setInterval(sendReading, 5000);
     }
   );
+
+  function sendReading() {
+    const message = JSON.stringify(sensorReading);
+
+    client.write(message);
+
+    console.log("Mesure TCP envoyée :", sensorReading);
+  }
 
   client.on("error", (error) => {
     console.error("Erreur de connexion TCP :", error.message);
@@ -44,19 +48,31 @@ function startTcpSimulator() {
 
 function startUdpSimulator() {
   const client = dgram.createSocket("udp4");
-  const message = Buffer.from(JSON.stringify(sensorReading));
 
-  client.send(message, UDP_PORT, HOST, (error) => {
-    if (error) {
-      console.error("Erreur d'envoi UDP :", error.message);
-      client.close();
-      return;
-    }
+  function sendReading() {
+    const message = Buffer.from(JSON.stringify(sensorReading));
 
-    console.log(`Mesure UDP envoyée vers ${HOST}:${UDP_PORT}`);
-    console.log("Mesure :", sensorReading);
+    client.send(message, UDP_PORT, HOST, (error) => {
+      if (error) {
+        console.error("Erreur d'envoi UDP :", error.message);
+        return;
+      }
 
+      console.log("Mesure UDP envoyée :", sensorReading);
+    });
+  }
+
+  console.log(`Envoi de mesures UDP vers ${HOST}:${UDP_PORT} toutes les 5 secondes`);
+
+  sendReading();
+
+  const interval = setInterval(sendReading, 5000);
+
+  process.on("SIGINT", () => {
+    clearInterval(interval);
     client.close();
+    console.log("Simulateur UDP arrêté.");
+    process.exit(0);
   });
 }
 
