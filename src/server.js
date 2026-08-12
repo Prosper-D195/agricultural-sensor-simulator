@@ -3,7 +3,7 @@ const dgram = require("node:dgram");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const HOST = "127.0.0.1";
+const HOST = "0.0.0.0";
 const PORT = 5000;
 const UDP_PORT = 5001;
 
@@ -91,38 +91,72 @@ function saveReadingToCsv(reading, protocol = "TCP") {
     .map((value) => `"${String(value).replaceAll('"', '""')}"`)
     .join(",");
 
-  fs.appendFileSync(CSV_FILE, `${row}\n`);
-
-  console.log(`Mesure ${protocol} enregistrée dans le fichier CSV.`);
+  try {
+    fs.appendFileSync(CSV_FILE, `${row}\n`);
+    console.log(`Mesure ${protocol} enregistrée dans le fichier CSV.`);
+  } catch (error) {
+    console.error(`Erreur d'écriture CSV (${protocol}) :`, error.message);
+  }
 }
 
 const server = net.createServer((socket) => {
-  console.log("Un client TCP vient de se connecter.");
+  console.log(
+    `Client TCP connecté : ${socket.remoteAddress}:${socket.remotePort}`
+  );
+
+  let buffer = "";
 
   socket.on("data", (data) => {
-    const message = data.toString();
+    buffer += data.toString();
 
-    console.log("Message reçu :", message);
+    const messages = buffer.split("\n");
+    buffer = messages.pop();
 
-    try {
-      const reading = JSON.parse(message);
+    for (const message of messages) {
+      if (!message.trim()) continue;
 
-      const validation = validateReading(reading);
+      console.log("Message reçu :", message);
 
-      if (!validation.valid) {
-        console.error("Mesure rejetée :", validation.message);
-        return;
+      try {
+        const reading = JSON.parse(message);
+
+        const validation = validateReading(reading);
+
+        if (!validation.valid) {
+          console.error("Mesure rejetée :", validation.message);
+
+          const response = {
+            success: false,
+            message: validation.message,
+          };
+
+          socket.write(JSON.stringify(response) + "\n");
+          return;
+        }
+
+        saveReadingToCsv(reading, "TCP");
+
+        console.log(
+          `[TCP] Mesure enregistrée : ${reading.sensorId} | ` +
+            `${reading.temperature}°C | ${reading.humidity}%`
+        );
+
+        const response = {
+          success: true,
+          message: "Mesure enregistrée",
+        };
+
+        socket.write(JSON.stringify(response) + "\n");
+      } catch (error) {
+        console.error("Le message reçu n'est pas un JSON valide.");
+
+        const response = {
+          success: false,
+          message: "JSON invalide",
+        };
+
+        socket.write(JSON.stringify(response) + "\n");
       }
-
-      saveReadingToCsv(reading);
-
-      console.log("Mesure valide :", reading);
-      console.log("Identifiant du capteur :", reading.sensorId);
-      console.log("Température :", reading.temperature, "°C");
-      console.log("Humidité :", reading.humidity, "%");
-      console.log("Date :", reading.timestamp);
-    } catch (error) {
-      console.error("Le message reçu n'est pas un JSON valide.");
     }
   });
 
@@ -135,14 +169,13 @@ const server = net.createServer((socket) => {
   });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Serveur TCP démarré sur ${HOST}:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Serveur TCP démarré sur le port ${PORT}`);
 });
 
 server.on("error", (error) => {
   console.error("Erreur du serveur TCP :", error.message);
 });
-
 
 const udpServer = dgram.createSocket("udp4");
 
@@ -165,7 +198,10 @@ udpServer.on("message", (message, remote) => {
 
     saveReadingToCsv(reading, "UDP");
 
-    console.log("Mesure UDP valide :", reading);
+    console.log(
+      `[UDP] Mesure enregistrée : ${reading.sensorId} | ` +
+        `${reading.temperature}°C | ${reading.humidity}%`
+    );
   } catch (error) {
     console.error("Le message UDP n'est pas un JSON valide.");
   }
@@ -176,6 +212,6 @@ udpServer.on("error", (error) => {
   udpServer.close();
 });
 
-udpServer.bind(UDP_PORT, HOST, () => {
-  console.log(`Serveur UDP démarré sur ${HOST}:${UDP_PORT}`);
+udpServer.bind(UDP_PORT, () => {
+  console.log(`Serveur UDP démarré sur le port ${UDP_PORT}`);
 });

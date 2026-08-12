@@ -7,12 +7,14 @@ const HOST = "127.0.0.1";
 const TCP_PORT = 5000;
 const UDP_PORT = 5001;
 
-const sensorReading = {
-  sensorId: "soil-01",
-  temperature: 31.2,
-  humidity: 24.7,
-  timestamp: "2026-08-03T20:00:00Z",
-};
+function createReading() {
+  return {
+    sensorId: "soil-01",
+    temperature: Number((28 + Math.random() * 8).toFixed(1)),
+    humidity: Number((20 + Math.random() * 25).toFixed(1)),
+    timestamp: new Date().toISOString(),
+  };
+}
 
 function startTcpSimulator() {
   const client = net.createConnection(
@@ -30,11 +32,13 @@ function startTcpSimulator() {
   );
 
   function sendReading() {
-    const message = JSON.stringify(sensorReading);
+    const reading = createReading();
+
+    const message = JSON.stringify(reading) + "\n";
 
     client.write(message);
 
-    console.log("Mesure TCP envoyée :", sensorReading);
+    console.log("Mesure TCP envoyée :", reading);
   }
 
   client.on("error", (error) => {
@@ -50,7 +54,9 @@ function startUdpSimulator() {
   const client = dgram.createSocket("udp4");
 
   function sendReading() {
-    const message = Buffer.from(JSON.stringify(sensorReading));
+    const reading = createReading();
+
+    const message = Buffer.from(JSON.stringify(reading));
 
     client.send(message, UDP_PORT, HOST, (error) => {
       if (error) {
@@ -58,7 +64,7 @@ function startUdpSimulator() {
         return;
       }
 
-      console.log("Mesure UDP envoyée :", sensorReading);
+      console.log("Mesure UDP envoyée :", reading);
     });
   }
 
