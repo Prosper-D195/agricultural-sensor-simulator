@@ -215,3 +215,23 @@ udpServer.on("error", (error) => {
 udpServer.bind(UDP_PORT, () => {
   console.log(`Serveur UDP démarré sur le port ${UDP_PORT}`);
 });
+
+function gracefulShutdown(signal) {
+  console.log(`\nSignal ${signal} reçu : fermeture propre du serveur...`);
+
+  server.close(() => {
+    console.log("Serveur TCP fermé.");
+  });
+
+  udpServer.close(() => {
+    console.log("Serveur UDP fermé.");
+  });
+
+  setTimeout(() => {
+    console.error("Fermeture forcée après timeout.");
+    process.exit(1);
+  }, 5000);
+}
+
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
