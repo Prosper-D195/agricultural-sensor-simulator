@@ -2,6 +2,7 @@ const net = require("node:net");
 const dgram = require("node:dgram");
 const fs = require("node:fs");
 const path = require("node:path");
+const Database = require("better-sqlite3");
 
 const HOST = "0.0.0.0";
 const PORT = 5000;
@@ -18,6 +19,31 @@ if (!fs.existsSync(CSV_FILE)) {
     "sensorId,temperature,humidity,timestamp,protocol\n"
   );
 }
+
+const DB_FILE = path.join(DATA_DIR, "readings.db");
+const db = new Database(DB_FILE);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sensor_id TEXT NOT NULL,
+    temperature REAL NOT NULL,
+    humidity REAL NOT NULL,
+    timestamp TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_readings_sensor_id
+  ON readings(sensor_id)
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_readings_timestamp
+  ON readings(timestamp)
+`);
 
 function validateReading(reading) {
   if (!reading || typeof reading !== "object") {
@@ -96,6 +122,27 @@ function saveReadingToCsv(reading, protocol = "TCP") {
     console.log(`Mesure ${protocol} enregistrée dans le fichier CSV.`);
   } catch (error) {
     console.error(`Erreur d'écriture CSV (${protocol}) :`, error.message);
+  }
+  saveReadingToDatabase(reading, protocol);
+}
+
+const insertReading = db.prepare(`
+  INSERT INTO readings (sensor_id, temperature, humidity, timestamp, protocol)
+  VALUES (?, ?, ?, ?, ?)
+`);
+
+function saveReadingToDatabase(reading, protocol) {
+  try {
+    insertReading.run(
+      reading.sensorId,
+      reading.temperature,
+      reading.humidity,
+      reading.timestamp,
+      protocol
+    );
+    console.log(`Mesure ${protocol} enregistrée dans la base SQLite.`);
+  } catch (error) {
+    console.error(`Erreur d'écriture SQLite (${protocol}) :`, error.message);
   }
 }
 
@@ -226,6 +273,9 @@ function gracefulShutdown(signal) {
   udpServer.close(() => {
     console.log("Serveur UDP fermé.");
   });
+
+  db.close();
+  console.log("Base SQLite fermée.");
 
   setTimeout(() => {
     console.error("Fermeture forcée après timeout.");
