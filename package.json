@@ -7,7 +7,7 @@
     "server": "node src/server.js",
     "sensor:tcp": "node src/sensor-simulator.js tcp",
     "sensor:udp": "node src/sensor-simulator.js udp",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -25,5 +25,8 @@
   "type": "commonjs",
   "dependencies": {
     "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }
