@@ -1,150 +1,12 @@
 const net = require("node:net");
 const dgram = require("node:dgram");
-const fs = require("node:fs");
-const path = require("node:path");
-const Database = require("better-sqlite3");
+const { validateReading } = require("./validation");
+const { saveReadingToCsv } = require("./storage");
+const { closeDatabase } = require("./database");
 
 const HOST = "0.0.0.0";
 const PORT = 5000;
 const UDP_PORT = 5001;
-
-const DATA_DIR = path.join(__dirname, "..", "data");
-const CSV_FILE = path.join(DATA_DIR, "readings.csv");
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-if (!fs.existsSync(CSV_FILE)) {
-  fs.writeFileSync(
-    CSV_FILE,
-    "sensorId,temperature,humidity,timestamp,protocol\n"
-  );
-}
-
-const DB_FILE = path.join(DATA_DIR, "readings.db");
-const db = new Database(DB_FILE);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS readings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sensor_id TEXT NOT NULL,
-    temperature REAL NOT NULL,
-    humidity REAL NOT NULL,
-    timestamp TEXT NOT NULL,
-    protocol TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_readings_sensor_id
-  ON readings(sensor_id)
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_readings_timestamp
-  ON readings(timestamp)
-`);
-
-function validateReading(reading) {
-  if (!reading || typeof reading !== "object") {
-    return {
-      valid: false,
-      message: "La mesure doit être un objet.",
-    };
-  }
-
-  if (
-    typeof reading.sensorId !== "string" ||
-    reading.sensorId.trim() === ""
-  ) {
-    return {
-      valid: false,
-      message: "sensorId doit être une chaîne non vide.",
-    };
-  }
-
-  if (
-    typeof reading.temperature !== "number" ||
-    Number.isNaN(reading.temperature)
-  ) {
-    return {
-      valid: false,
-      message: "temperature doit être un nombre.",
-    };
-  }
-
-  if (
-    typeof reading.humidity !== "number" ||
-    Number.isNaN(reading.humidity)
-  ) {
-    return {
-      valid: false,
-      message: "humidity doit être un nombre.",
-    };
-  }
-
-  if (reading.humidity < 0 || reading.humidity > 100) {
-    return {
-      valid: false,
-      message: "humidity doit être comprise entre 0 et 100.",
-    };
-  }
-
-  if (
-    typeof reading.timestamp !== "string" ||
-    Number.isNaN(Date.parse(reading.timestamp))
-  ) {
-    return {
-      valid: false,
-      message: "timestamp doit être une date valide.",
-    };
-  }
-
-  return {
-    valid: true,
-    message: "Mesure valide.",
-  };
-}
-
-function saveReadingToCsv(reading, protocol = "TCP") {
-  const row = [
-    reading.sensorId,
-    reading.temperature,
-    reading.humidity,
-    reading.timestamp,
-    protocol,
-  ]
-    .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-    .join(",");
-
-  try {
-    fs.appendFileSync(CSV_FILE, `${row}\n`);
-    console.log(`Mesure ${protocol} enregistrée dans le fichier CSV.`);
-  } catch (error) {
-    console.error(`Erreur d'écriture CSV (${protocol}) :`, error.message);
-  }
-  saveReadingToDatabase(reading, protocol);
-}
-
-const insertReading = db.prepare(`
-  INSERT INTO readings (sensor_id, temperature, humidity, timestamp, protocol)
-  VALUES (?, ?, ?, ?, ?)
-`);
-
-function saveReadingToDatabase(reading, protocol) {
-  try {
-    insertReading.run(
-      reading.sensorId,
-      reading.temperature,
-      reading.humidity,
-      reading.timestamp,
-      protocol
-    );
-    console.log(`Mesure ${protocol} enregistrée dans la base SQLite.`);
-  } catch (error) {
-    console.error(`Erreur d'écriture SQLite (${protocol}) :`, error.message);
-  }
-}
 
 const server = net.createServer((socket) => {
   console.log(
@@ -274,7 +136,7 @@ function gracefulShutdown(signal) {
     console.log("Serveur UDP fermé.");
   });
 
-  db.close();
+  closeDatabase();
   console.log("Base SQLite fermée.");
 
   setTimeout(() => {
